@@ -107,6 +107,61 @@ public class CSharpProjectParser : IProjectFileParser
                 }
             }
 
+            // Extract assembly references - try both with and without namespace
+            var assemblyReferenceNodes = xmlDoc.SelectNodes("//Reference") ??
+                                       xmlDoc.SelectNodes("//ms:Reference", namespaceManager);
+            if (assemblyReferenceNodes != null)
+            {
+                foreach (XmlNode node in assemblyReferenceNodes)
+                {
+                    var includeAttribute = node.Attributes?["Include"];
+                    if (includeAttribute != null)
+                    {
+                        // Extract HintPath child element
+                        //var hintPathNode = node.SelectSingleNode("HintPath") ??
+                                         node.SelectSingleNode("ms:HintPath", namespaceManager);
+                        //var hintPath = hintPathNode?.InnerText.Trim() ?? string.Empty;
+
+                        // Check if this Reference might point to a project
+                        //if (CouldBeProjectReferenceByName(includeAttribute.Value, hintPath))
+                       // {
+                            // Extract assembly name (part before the comma)
+                            var assemblyName = ExtractAssemblyName(includeAttribute.Value);
+                            
+                            var dependency = new ProjectDependency
+                            {
+                                ReferencedProjectPath = assemblyName, // Will be resolved later
+                                ReferencedProjectName = assemblyName,
+                                IsResolved = false
+                            };
+                            projectInfo.ProjectReferences.Add(dependency);
+                            //continue; // Skip adding as assembly reference
+                      //  }
+
+                        // If not a project reference, treat as assembly reference
+                        // var assemblyRef = new AssemblyReference
+                        // {
+                        //     AssemblyName = includeAttribute.Value,
+                        //     HintPath = hintPath
+                        // };
+
+                        // Parse assembly name components (Name, Version, Culture, processorArchitecture)
+                        // ParseAssemblyNameComponents(assemblyRef);
+
+                        // Extract SpecificVersion child element
+                        // var specificVersionNode = node.SelectSingleNode("SpecificVersion") ??
+                        //                         node.SelectSingleNode("ms:SpecificVersion", namespaceManager);
+                        // if (specificVersionNode != null)
+                        // {
+                        //     bool.TryParse(specificVersionNode.InnerText, out bool specificVersion);
+                        //     assemblyRef.SpecificVersion = specificVersion;
+                        // }
+                        //
+                        // projectInfo.AssemblyReferences.Add(assemblyRef);
+                    }
+                }
+            }
+
             return projectInfo;
         }
         catch (XmlException ex)
@@ -116,6 +171,128 @@ public class CSharpProjectParser : IProjectFileParser
         catch (Exception ex) when (!(ex is ArgumentException || ex is FileNotFoundException || ex is ProjectParsingException))
         {
             throw new ProjectParsingException(projectFilePath, $"Unexpected error parsing project file: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Determines if a Reference node could potentially point to a project based on assembly name
+    /// </summary>
+    /// <param name="includeValue">The Include attribute value from a Reference node</param>
+    /// <param name="hintPath">The HintPath value (if any)</param>
+    /// <returns>True if the reference could be a project reference</returns>
+    private static bool CouldBeProjectReferenceByName(string includeValue, string hintPath)
+    {
+        if (string.IsNullOrWhiteSpace(includeValue))
+            return false;
+
+        // Extract assembly name (part before the comma)
+        var assemblyName = ExtractAssemblyName(includeValue);
+        
+        // Skip obvious system/framework assemblies
+        var systemPrefixes = new[] { "Microsoft", "System", "mscorlib", "netstandard", "Windows" };
+        if (systemPrefixes.Any(prefix => assemblyName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        // If there's a HintPath, use the existing logic for path-based detection
+        if (!string.IsNullOrEmpty(hintPath))
+        {
+            return CouldBeProjectReferenceByPath(hintPath);
+        }
+
+        // For references without HintPath, assume they could be project references
+        // unless they look like system assemblies
+        return true;
+    }
+
+    /// <summary>
+    /// Determines if a HintPath could potentially point to a project output
+    /// </summary>
+    /// <param name="hintPath">The HintPath value from a Reference node</param>
+    /// <returns>True if the path could be a project reference</returns>
+    private static bool CouldBeProjectReferenceByPath(string hintPath)
+    {
+        if (string.IsNullOrWhiteSpace(hintPath))
+            return false;
+
+        // Check if it's a DLL file
+        if (!hintPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Check if it's an absolute path to system directories - these are definitely not project references
+        var systemPaths = new[] { "windows", "system32", "program files", "gac", "microsoft.net", "dotnet" };
+        var lowerPath = hintPath.ToLowerInvariant();
+        if (systemPaths.Any(sysPath => lowerPath.Contains(sysPath)))
+            return false;
+
+        // Check if it's an absolute path starting with C:\ or similar - likely external
+        if (Path.IsPathRooted(hintPath) && !hintPath.StartsWith(".."))
+        {
+            // If it's a rooted path but contains bin/obj, it might still be a project reference
+            if (hintPath.Contains("bin", StringComparison.OrdinalIgnoreCase) || 
+                hintPath.Contains("obj", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            return false; // Other rooted paths are likely external assemblies
+        }
+
+        // Check if it contains relative path indicators and bin/obj (suggesting it's a project output)
+        // But be more specific - it should look like a project structure (e.g., ../ProjectName/bin/Debug/ProjectName.dll)
+        if (hintPath.Contains("bin", StringComparison.OrdinalIgnoreCase) || 
+            hintPath.Contains("obj", StringComparison.OrdinalIgnoreCase))
+        {
+            // Additional check: the path should contain at least 3 segments to be a project reference
+            // e.g., ../ProjectName/bin/Debug/ProjectName.dll or ProjectName/bin/Debug/ProjectName.dll
+            var segments = hintPath.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+            var dotDotCount = segments.Count(s => s == "..");
+            var nonDotDotSegments = segments.Length - dotDotCount;
+            
+            // Should have at least: ProjectName, bin/obj, configuration, dll
+            if (nonDotDotSegments >= 3)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Extracts the assembly name (part before the comma) from the Include attribute
+    /// </summary>
+    /// <param name="includeValue">The full Include attribute value</param>
+    /// <returns>Assembly name without version/culture information</returns>
+    private static string ExtractAssemblyName(string includeValue)
+    {
+        if (string.IsNullOrWhiteSpace(includeValue))
+            return string.Empty;
+
+        var commaIndex = includeValue.IndexOf(',');
+        return commaIndex > 0 ? includeValue.Substring(0, commaIndex).Trim() : includeValue.Trim();
+    }
+
+    /// <summary>
+    /// Parses assembly name components from the Include attribute value
+    /// </summary>
+    /// <param name="assemblyRef">Assembly reference to populate with parsed components</param>
+    private static void ParseAssemblyNameComponents(AssemblyReference assemblyRef)
+    {
+        var parts = assemblyRef.AssemblyName.Split(',');
+        
+        foreach (var part in parts)
+        {
+            var trimmedPart = part.Trim();
+            
+            if (trimmedPart.StartsWith("Version=", StringComparison.OrdinalIgnoreCase))
+            {
+                assemblyRef.Version = trimmedPart.Substring(8);
+            }
+            else if (trimmedPart.StartsWith("Culture=", StringComparison.OrdinalIgnoreCase))
+            {
+                assemblyRef.Culture = trimmedPart.Substring(8);
+            }
+            else if (trimmedPart.StartsWith("processorArchitecture=", StringComparison.OrdinalIgnoreCase))
+            {
+                assemblyRef.ProcessorArchitecture = trimmedPart.Substring(22);
+            }
         }
     }
 }

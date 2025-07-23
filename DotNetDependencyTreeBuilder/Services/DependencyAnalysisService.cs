@@ -484,6 +484,7 @@ public class DependencyAnalysisService : IDependencyAnalysisService
                     // Update the project with parsed information
                     project.ProjectReferences = parsedProject.ProjectReferences;
                     project.PackageReferences = parsedProject.PackageReferences;
+                    project.AssemblyReferences = parsedProject.AssemblyReferences;
                     project.TargetFramework = parsedProject.TargetFramework;
                     
                     parsedCount++;

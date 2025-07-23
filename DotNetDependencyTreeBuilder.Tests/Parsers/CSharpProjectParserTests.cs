@@ -291,4 +291,64 @@ public class CSharpProjectParserTests : IDisposable
         // Assert
         result.TargetFramework.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task ParseProjectFileAsync_WithReferenceNodeByNameOnly_TreatsAsProjectDependency()
+    {
+        // Arrange
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net6.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <Reference Include="Infor.Blending.Controls.CDocumentViewer, Version=8.2.1.0, Culture=neutral, processorArchitecture=x86">
+                </Reference>
+              </ItemGroup>
+            </Project>
+            """;
+        var filePath = Path.Combine(_tempDirectory, "ProjectWithReferenceByName.csproj");
+        await File.WriteAllTextAsync(filePath, projectContent);
+
+        // Act
+        var result = await _parser.ParseProjectFileAsync(filePath);
+
+        // Assert
+        result.ProjectReferences.Should().HaveCount(1);
+        result.ProjectReferences[0].ReferencedProjectName.Should().Be("Infor.Blending.Controls.CDocumentViewer");
+        result.ProjectReferences[0].ReferencedProjectPath.Should().Be("Infor.Blending.Controls.CDocumentViewer");
+        result.ProjectReferences[0].IsResolved.Should().BeFalse();
+        result.AssemblyReferences.Should().BeEmpty(); // Should not be treated as assembly reference
+    }
+
+    [Fact]
+    public async Task ParseProjectFileAsync_WithSystemReferenceNodeByNameOnly_TreatsAsAssemblyReference()
+    {
+        // Arrange
+        var projectContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net6.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <Reference Include="Microsoft.Extensions.Logging, Version=6.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+                </Reference>
+                <Reference Include="System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+                </Reference>
+              </ItemGroup>
+            </Project>
+            """;
+        var filePath = Path.Combine(_tempDirectory, "ProjectWithSystemReferences.csproj");
+        await File.WriteAllTextAsync(filePath, projectContent);
+
+        // Act
+        var result = await _parser.ParseProjectFileAsync(filePath);
+
+        // Assert
+        result.ProjectReferences.Should().BeEmpty(); // System references should not be treated as project dependencies
+        result.AssemblyReferences.Should().HaveCount(2);
+        result.AssemblyReferences[0].AssemblyName.Should().Be("Microsoft.Extensions.Logging, Version=6.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60");
+        result.AssemblyReferences[1].AssemblyName.Should().Be("System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089");
+    }
+
 }

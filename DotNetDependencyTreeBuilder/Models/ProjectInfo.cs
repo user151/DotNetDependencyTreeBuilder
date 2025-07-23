@@ -31,6 +31,11 @@ public class ProjectInfo
     public List<PackageReference> PackageReferences { get; set; } = new();
 
     /// <summary>
+    /// List of direct assembly references
+    /// </summary>
+    public List<AssemblyReference> AssemblyReferences { get; set; } = new();
+
+    /// <summary>
     /// Target framework of the project
     /// </summary>
     public string TargetFramework { get; set; } = string.Empty;
