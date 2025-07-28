@@ -53,21 +53,22 @@ public class VBProjectParser : IProjectFileParser
             var namespaceManager = new XmlNamespaceManager(xmlDoc.NameTable);
             namespaceManager.AddNamespace("ms", "http://schemas.microsoft.com/developer/msbuild/2003");
 
-            // Extract target framework - try both with and without namespace
-            var targetFrameworkNode = xmlDoc.SelectSingleNode("//TargetFramework") ?? 
-                                    xmlDoc.SelectSingleNode("//TargetFrameworks") ??
-                                    xmlDoc.SelectSingleNode("//ms:TargetFramework", namespaceManager) ??
-                                    xmlDoc.SelectSingleNode("//ms:TargetFrameworks", namespaceManager);
-            if (targetFrameworkNode != null)
-            {
-                projectInfo.TargetFramework = targetFrameworkNode.InnerText.Trim();
-            }
+         // Extract target framework - try both with and without namespace
+         var targetFrameworkNode = GetXmlSingleNode(xmlDoc, "//TargetFramework", namespaceManager, "ms");
+         if (targetFrameworkNode == null || targetFrameworkNode.InnerText.Trim() == string.Empty)
+         {
+            // If no single TargetFramework node found, try TargetFrameworks
+            targetFrameworkNode = GetXmlSingleNode(xmlDoc, "//TargetFrameworks", namespaceManager, "ms");
+         }
+         if (targetFrameworkNode != null)
+         {
+            projectInfo.TargetFramework = targetFrameworkNode.InnerText.Trim();
+         }
 
-            // Extract project references - try both with and without namespace
-            var projectReferenceNodes = xmlDoc.SelectNodes("//ProjectReference") ??
-                                      xmlDoc.SelectNodes("//ms:ProjectReference", namespaceManager);
-            if (projectReferenceNodes != null)
-            {
+         // Extract project references - try both with and without namespace
+         var projectReferenceNodes = GetXmlNodeList(xmlDoc, "//ProjectReference", namespaceManager, "ms");
+         if (projectReferenceNodes != null && projectReferenceNodes.Count > 0)
+         {
                 foreach (XmlNode node in projectReferenceNodes)
                 {
                     var includeAttribute = node.Attributes?["Include"];
@@ -85,11 +86,10 @@ public class VBProjectParser : IProjectFileParser
                 }
             }
 
-            // Extract package references - try both with and without namespace
-            var packageReferenceNodes = xmlDoc.SelectNodes("//PackageReference") ??
-                                      xmlDoc.SelectNodes("//ms:PackageReference", namespaceManager);
-            if (packageReferenceNodes != null)
-            {
+         // Extract package references - try both with and without namespace
+         var packageReferenceNodes = GetXmlNodeList(xmlDoc, "//PackageReference", namespaceManager, "ms");
+         if (packageReferenceNodes != null && packageReferenceNodes.Count > 0)
+         {
                 foreach (XmlNode node in packageReferenceNodes)
                 {
                     var includeAttribute = node.Attributes?["Include"];
@@ -107,58 +107,28 @@ public class VBProjectParser : IProjectFileParser
                 }
             }
 
-            // Extract assembly references - try both with and without namespace
-            var assemblyReferenceNodes = xmlDoc.SelectNodes("//Reference") ??
-                                       xmlDoc.SelectNodes("//ms:Reference", namespaceManager);
-            if (assemblyReferenceNodes != null)
-            {
+         // Extract assembly references - try both with and without namespace
+         var assemblyReferenceNodes = GetXmlNodeList(xmlDoc, "//Reference", namespaceManager, "ms");
+         if (assemblyReferenceNodes != null && assemblyReferenceNodes.Count > 0)
+         {
                 foreach (XmlNode node in assemblyReferenceNodes)
                 {
                     var includeAttribute = node.Attributes?["Include"];
-                    if (includeAttribute != null)
-                    {
-                        // Extract HintPath child element
-                        //var hintPathNode = node.SelectSingleNode("HintPath") ??
-                       //                  node.SelectSingleNode("ms:HintPath", namespaceManager);
-                       // var hintPath = hintPathNode?.InnerText.Trim() ?? string.Empty;
+               if (includeAttribute != null)
+                  {
 
-                        // Check if this Reference might point to a project
-                       // if (CouldBeProjectReferenceByName(includeAttribute.Value, hintPath))
-                      //  {
-                            // Extract assembly name (part before the comma)
-                            var assemblyName = ExtractAssemblyName(includeAttribute.Value);
-                            
-                            var dependency = new ProjectDependency
-                            {
-                                ReferencedProjectPath = assemblyName, // Will be resolved later
-                                ReferencedProjectName = assemblyName,
-                                IsResolved = false
-                            };
-                            projectInfo.ProjectReferences.Add(dependency);
-                         //   continue; // Skip adding as assembly reference
-                       // }
+                     // Extract assembly name (part before the comma)
+                     var assemblyName = ExtractAssemblyName(includeAttribute.Value);
 
-                        // If not a project reference, treat as assembly reference
-                        // var assemblyRef = new AssemblyReference
-                        // {
-                        //     AssemblyName = includeAttribute.Value,
-                        //     HintPath = hintPath
-                        // };
+                     var dependency = new ProjectDependency
+                     {
+                        ReferencedProjectPath = assemblyName, // Will be resolved later
+                        ReferencedProjectName = assemblyName,
+                        IsResolved = false
+                     };
+                     projectInfo.ProjectReferences.Add(dependency);
 
-                        // Parse assembly name components (Name, Version, Culture, processorArchitecture)
-                        // ParseAssemblyNameComponents(assemblyRef);
-                        //
-                        // // Extract SpecificVersion child element
-                        // var specificVersionNode = node.SelectSingleNode("SpecificVersion") ??
-                        //                         node.SelectSingleNode("ms:SpecificVersion", namespaceManager);
-                        // if (specificVersionNode != null)
-                        // {
-                        //     bool.TryParse(specificVersionNode.InnerText, out bool specificVersion);
-                        //     assemblyRef.SpecificVersion = specificVersion;
-                        // }
-                        //
-                        // projectInfo.AssemblyReferences.Add(assemblyRef);
-                    }
+                  }
                 }
             }
 
@@ -174,13 +144,41 @@ public class VBProjectParser : IProjectFileParser
         }
     }
 
-    /// <summary>
-    /// Determines if a Reference node could potentially point to a project based on assembly name
-    /// </summary>
-    /// <param name="includeValue">The Include attribute value from a Reference node</param>
-    /// <param name="hintPath">The HintPath value (if any)</param>
-    /// <returns>True if the reference could be a project reference</returns>
-    private static bool CouldBeProjectReferenceByName(string includeValue, string hintPath)
+   private static XmlNodeList? GetXmlNodeList(XmlDocument xmlDoc, string xpath, XmlNamespaceManager namespaceManager, string prefix)
+   {
+      
+      if (xmlDoc == null || string.IsNullOrWhiteSpace(xpath))
+         return null;
+      var nodes = xmlDoc.SelectNodes(xpath);
+      if (nodes == null || nodes.Count == 0)
+      {
+         var nsPrefix = namespaceManager.LookupPrefix(namespaceManager.DefaultNamespace);
+         xpath = xpath.Replace("//", $"//{prefix}:");
+         return xmlDoc.SelectNodes(xpath, namespaceManager); 
+      }
+      return nodes;
+   }
+   private static XmlNode? GetXmlSingleNode(XmlDocument xmlDoc, string xpath, XmlNamespaceManager namespaceManager, string prefix)
+   {      
+      if (xmlDoc == null || string.IsNullOrWhiteSpace(xpath))
+         return null;
+      
+      var node = xmlDoc.SelectSingleNode(xpath); 
+      if (node == null)
+      {         
+         xpath = xpath.Replace("//", $"//{prefix}:");
+         return xmlDoc.SelectSingleNode(xpath, namespaceManager);
+      }
+      return node;
+   }
+
+   /// <summary>
+   /// Determines if a Reference node could potentially point to a project based on assembly name
+   /// </summary>
+   /// <param name="includeValue">The Include attribute value from a Reference node</param>
+   /// <param name="hintPath">The HintPath value (if any)</param>
+   /// <returns>True if the reference could be a project reference</returns>
+   private static bool CouldBeProjectReferenceByName(string includeValue, string hintPath)
     {
         if (string.IsNullOrWhiteSpace(includeValue))
             return false;
