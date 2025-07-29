@@ -46,11 +46,13 @@ public class TextConsoleOutputTests : IDisposable
         result.Should().Contain("Projects Found: 4");
         result.Should().Contain("Build Levels: 2");
         result.Should().Contain("Circular Dependencies: None");
-        result.Should().Contain("Level 1:");
-        result.Should().Contain("Level 2:");
+        result.Should().Contain("Build Order:");
         result.Should().Contain("Core.Library.csproj");
         result.Should().Contain("Business.Logic.csproj");
         result.Should().Contain("Web.API.csproj");
+        // Should not contain level groupings
+        result.Should().NotContain("Level 1:");
+        result.Should().NotContain("Level 2:");
     }
 
     [Fact]
@@ -77,7 +79,7 @@ public class TextConsoleOutputTests : IDisposable
     }
 
     [Fact]
-    public async Task OutputBuildOrderAsync_WithParallelProjects_ShouldIndicateParallelBuild()
+    public async Task OutputBuildOrderAsync_WithParallelProjects_ShouldShowLinearOrder()
     {
         // Arrange
         var buildOrder = new BuildOrder
@@ -97,7 +99,12 @@ public class TextConsoleOutputTests : IDisposable
 
         // Assert
         var result = _consoleOutput.ToString();
-        result.Should().Contain("Level 1: (Can be built in parallel)");
+        result.Should().Contain("Build Order:");
+        result.Should().Contain("Project1.csproj");
+        result.Should().Contain("Project2.csproj");
+        // Should not contain level groupings or parallel indicators
+        result.Should().NotContain("Level 1:");
+        result.Should().NotContain("(Can be built in parallel)");
     }
 
     [Fact]

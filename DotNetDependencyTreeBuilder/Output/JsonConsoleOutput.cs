@@ -71,25 +71,23 @@ public class JsonConsoleOutput : IConsoleOutput
     /// <returns>JSON-serializable object</returns>
     private object CreateJsonOutput(BuildOrder buildOrder)
     {
+        // Flatten all projects from all levels into a single list
+        var allProjects = buildOrder.BuildLevels.SelectMany(level => level).ToList();
+        
         return new
         {
             Summary = new
             {
                 ProjectsFound = buildOrder.TotalProjects,
-                BuildLevels = buildOrder.TotalLevels,
                 CircularDependencies = buildOrder.CircularDependencies.ToArray(),
                 HasCircularDependencies = buildOrder.HasCircularDependencies
             },
-            BuildOrder = buildOrder.BuildLevels.Select((level, index) => new
+            BuildOrder = allProjects.Select(p => new
             {
-                Level = index + 1,
-                Projects = level.Select(p => new
-                {
-                    FilePath = p.FilePath,
-                    ProjectName = p.ProjectName,
-                    ProjectType = p.Type.ToString(),
-                    TargetFramework = p.TargetFramework
-                }).ToArray()
+                FilePath = p.FilePath,
+                ProjectName = p.ProjectName,
+                ProjectType = p.Type.ToString(),
+                TargetFramework = p.TargetFramework
             }).ToArray()
         };
     }

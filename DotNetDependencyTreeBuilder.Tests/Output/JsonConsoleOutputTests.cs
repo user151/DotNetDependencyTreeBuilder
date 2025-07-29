@@ -46,15 +46,16 @@ public class JsonConsoleOutputTests : IDisposable
         var jsonDocument = JsonDocument.Parse(result);
         
         jsonDocument.RootElement.GetProperty("summary").GetProperty("projectsFound").GetInt32().Should().Be(3);
-        jsonDocument.RootElement.GetProperty("summary").GetProperty("buildLevels").GetInt32().Should().Be(2);
         jsonDocument.RootElement.GetProperty("summary").GetProperty("hasCircularDependencies").GetBoolean().Should().BeFalse();
         
+        // BuildOrder should now be a flat array of projects (no levels)
         var buildOrderArray = jsonDocument.RootElement.GetProperty("buildOrder");
-        buildOrderArray.GetArrayLength().Should().Be(2);
+        buildOrderArray.GetArrayLength().Should().Be(3); // All projects flattened
         
-        var level1 = buildOrderArray[0];
-        level1.GetProperty("level").GetInt32().Should().Be(1);
-        level1.GetProperty("projects").GetArrayLength().Should().Be(2);
+        // Check that projects are included
+        var firstProject = buildOrderArray[0];
+        firstProject.GetProperty("filePath").GetString().Should().Contain(".csproj");
+        firstProject.GetProperty("projectName").GetString().Should().NotBeNullOrEmpty();
     }
 
     [Fact]
@@ -157,7 +158,8 @@ public class JsonConsoleOutputTests : IDisposable
         var result = _consoleOutput.ToString();
         var jsonDocument = JsonDocument.Parse(result);
         
-        var project = jsonDocument.RootElement.GetProperty("buildOrder")[0].GetProperty("projects")[0];
+        // BuildOrder is now a flat array, so access the first project directly
+        var project = jsonDocument.RootElement.GetProperty("buildOrder")[0];
         project.GetProperty("filePath").GetString().Should().Be("/path/to/Core.Library.csproj");
         project.GetProperty("projectName").GetString().Should().Be("Core.Library");
         project.GetProperty("projectType").GetString().Should().Be("CSharp");

@@ -81,23 +81,12 @@ public class TextConsoleOutput : IConsoleOutput
         sb.AppendLine();
         sb.AppendLine("Build Order:");
         
-        // Build levels
-        for (int i = 0; i < buildOrder.BuildLevels.Count; i++)
+        // Flatten all projects from all levels into a single list
+        var allProjects = buildOrder.BuildLevels.SelectMany(level => level).ToList();
+        
+        foreach (var project in allProjects)
         {
-            var level = buildOrder.BuildLevels[i];
-            if (level.Count == 0) continue;
-            
-            sb.AppendLine($"Level {i + 1}:{(level.Count > 1 ? " (Can be built in parallel)" : "")}");
-            
-            foreach (var project in level)
-            {
-                sb.AppendLine($"  - {project.FilePath}");
-            }
-            
-            if (i < buildOrder.BuildLevels.Count - 1)
-            {
-                sb.AppendLine();
-            }
+            sb.AppendLine($"  - {project.FilePath}");
         }
         
         return sb.ToString();

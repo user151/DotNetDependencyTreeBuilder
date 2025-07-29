@@ -27,9 +27,11 @@ public class OutputIntegrationTests
             content.Should().Contain("Circular Dependencies: 1");
             content.Should().Contain("CIRCULAR DEPENDENCIES DETECTED:");
             content.Should().Contain("ProjectA -> ProjectB -> ProjectA");
-            content.Should().Contain("Level 1:");
-            content.Should().Contain("Level 2:");
-            content.Should().Contain("Level 3:");
+            content.Should().Contain("Build Order:");
+            // Should not contain level groupings
+            content.Should().NotContain("Level 1:");
+            content.Should().NotContain("Level 2:");
+            content.Should().NotContain("Level 3:");
         }
         finally
         {
@@ -54,13 +56,14 @@ public class OutputIntegrationTests
             // Assert
             var content = await File.ReadAllTextAsync(tempFile);
             content.Should().Contain("\"projectsFound\": 5");
-            content.Should().Contain("\"buildLevels\": 3");
             content.Should().Contain("\"hasCircularDependencies\": true");
             content.Should().Contain("\"circularDependencies\":");
             content.Should().Contain("ProjectA -\\u003E ProjectB -\\u003E ProjectA");
             content.Should().Contain("\"buildOrder\":");
-            content.Should().Contain("\"level\": 1");
-            content.Should().Contain("\"projects\":");
+            // Should not contain level groupings
+            content.Should().NotContain("\"buildLevels\":");
+            content.Should().NotContain("\"level\": 1");
+            content.Should().NotContain("\"projects\":");
         }
         finally
         {
