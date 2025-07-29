@@ -6,7 +6,7 @@ namespace DotNetDependencyTreeBuilder.Models;
 public class DependencyGraph
 {
     private readonly Dictionary<string, ProjectInfo> _projects = new();
-    private readonly Dictionary<string, List<string>> _adjacencyList = new();
+    private  Dictionary<string, List<string>> _adjacencyList = new();
 
     /// <summary>
     /// Gets all projects in the graph
@@ -16,7 +16,18 @@ public class DependencyGraph
     /// <summary>
     /// Gets the adjacency list representation of the graph
     /// </summary>
-    public IReadOnlyDictionary<string, List<string>> AdjacencyList => _adjacencyList;
+    public Dictionary<string, List<string>> AdjacencyList
+   {
+
+      get
+      { return _adjacencyList; }
+      set
+      {
+         _adjacencyList = value;
+      }
+
+   }
+
 
     /// <summary>
     /// Adds a project to the dependency graph
